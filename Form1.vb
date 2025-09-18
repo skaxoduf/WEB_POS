@@ -14,6 +14,7 @@ Imports System.Windows.Forms
 Imports System.Windows.Forms.VisualStyles.VisualStyleElement
 Imports AForge.Video
 Imports AForge.Video.DirectShow
+Imports Microsoft.VisualBasic.ApplicationServices
 Imports Microsoft.Web.WebView2.Core
 Imports Microsoft.Web.WebView2.WinForms
 
@@ -79,10 +80,10 @@ Public Class Form1
             gFormGb = "W"
         End If
 
-        ' 디비정보 읽어오기
-        If Config_Load2() = False Then
-            MessageBox.Show("시스템 정보 확인 필요!", "Debug", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End If
+        ' 디비정보 읽어오기 (사용안함, 웹에서 Json으로 받아오기때문에)
+        'If Config_Load2() = False Then
+        '    MessageBox.Show("시스템 정보 확인 필요!", "Debug", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        'End If
 
         ' 시리얼 포트번호가 있으면 시리얼에 연결한다.
         If IsNumeric(gSeralPortNo) = True Then
@@ -211,6 +212,12 @@ Public Class Form1
                     Case "fnJava_Post"
                         Await fnJava_Post()
 
+                    Case "Set_DBInfo"
+                        If data.TryGetProperty("dbInfo", Nothing) Then
+                            Dim dbInfoJson As String = data.GetProperty("dbInfo").GetRawText()
+                            Await Set_DBInfo(dbInfoJson)    '웹으로부터 디비접속정보를 Json 문자열로 받아서 전역변수에 담는 함수
+                        End If
+
                     Case "Get_WebPosInfo"
                         Await Get_WebPosInfo() '웹포스가 설치된 pc의 ini 파일을 호출하는 함수
 
@@ -274,6 +281,48 @@ Public Class Form1
                             "오류", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
+    Public Async Function Set_DBInfo(ByVal jsonStr As String) As Task
+        Try
+            Using doc As JsonDocument = JsonDocument.Parse(jsonStr)
+                Dim root As JsonElement = doc.RootElement
+
+                gServer = GetJsonString(root, "server")
+                gDatabase = GetJsonString(root, "database")
+                gUser = GetJsonString(root, "user")
+                gPass = GetJsonString(root, "pass")
+
+                '전역변수에 담긴 디비정보로 디비접속문자열 생성
+                modDBConn.ConnectionString = $"Data Source={gServer};Initial Catalog={gDatabase};User ID={gUser};Password={gPass};TrustServerCertificate=True"
+
+                ' MessageBox.Show($"DB 정보 수신 완료:" & vbCrLf &
+                '                 $"Server: {gServer}" & vbCrLf &
+                '                 $"Database: {gDatabase}" & vbCrLf &
+                '                 $"User: {gUser}", "DB 정보 설정 완료")
+
+            End Using
+        Catch ex As Exception
+            MessageBox.Show("DB 정보 처리 중 오류 발생: " & ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Function
+    Public Async Function Get_WebJson(ByVal jsonStr As String) As Task
+
+        Try
+            Using doc As JsonDocument = JsonDocument.Parse(jsonStr)
+                Dim root As JsonElement = doc.RootElement
+
+                Dim intResult As String = GetJsonString(root, "intResult", True)
+                Dim strResult As String = GetJsonString(root, "strResult")
+                Dim strNull As String = GetJsonString(root, "strNull", defaultValue:="(null)")  ' 받는 파라메터 변수명(defaultValue) 을 명시적으로 선언해서 필요없는 인자를 생략한다.
+
+                MessageBox.Show($"Get_WebJson 호출됨:" & vbCrLf &
+                            $"intResult: {intResult}" & vbCrLf &
+                            $"strResult: {strResult}" & vbCrLf &
+                            $"strNull: {strNull}", "CS 제이슨 수신 완료!")
+            End Using
+        Catch ex As Exception
+            MessageBox.Show("Get_WebJson 처리 오류: " & ex.Message, "오류")
+        End Try
+    End Function
     Private Function Config_Load() As Boolean
 
         Config_Load = True
@@ -380,25 +429,7 @@ Public Class Form1
         Await WebView21.ExecuteScriptAsync(jsCode)
 
     End Function
-    Public Async Function Get_WebJson(ByVal jsonStr As String) As Task
 
-        Try
-            Using doc As JsonDocument = JsonDocument.Parse(jsonStr)
-                Dim root As JsonElement = doc.RootElement
-
-                Dim intResult As String = GetJsonString(root, "intResult", True)
-                Dim strResult As String = GetJsonString(root, "strResult")
-                Dim strNull As String = GetJsonString(root, "strNull", defaultValue:="(null)")  ' 받는 파라메터 변수명(defaultValue) 을 명시적으로 선언해서 필요없는 인자를 생략한다.
-
-                MessageBox.Show($"Get_WebJson 호출됨:" & vbCrLf &
-                            $"intResult: {intResult}" & vbCrLf &
-                            $"strResult: {strResult}" & vbCrLf &
-                            $"strNull: {strNull}", "CS 제이슨 수신 완료!")
-            End Using
-        Catch ex As Exception
-            MessageBox.Show("Get_WebJson 처리 오류: " & ex.Message, "오류")
-        End Try
-    End Function
     ' Json 문자열 값 꺼내오는 함수 
     Private Function GetJsonString(root As JsonElement, propName As String, Optional asRawText As Boolean = False, Optional defaultValue As String = "") As String
         Dim value As String = defaultValue
@@ -492,8 +523,7 @@ Public Class Form1
             'End If
 
 
-
-            ' 2. 페이지 로드가 완료된 후 JavaScript 함수 호출  
+            ' 2. 페이지 로드가 완료된 후 JavaScript 함수 호출
             'Dim jsCode As String = $"imgView('{base64String}');"   ' imgView : 자바스크립트에서 받는 함수명
             Dim jsCode As String = $"$.fnWebImgView('{base64String}', '{gBase64ID}', '{gImgViewID}', '{gMainYN}');"   ' jquery imgView : 자바스크립트에서 받는 함수명
             'Dim jsCode As String = $"imgView('{base64String}', '{gImgViewID}');"     ' 일반함수로 처리할때
@@ -506,9 +536,6 @@ Public Class Form1
         Catch ex As Exception
             MessageBox.Show("WebView2로 Base64 전송 중 오류 발생: " & ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
-
-
-
 
     End Function
     Private Sub Button3_Click(sender As Object, e As EventArgs) Handles Button3.Click

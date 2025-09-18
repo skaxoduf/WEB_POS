@@ -1,0 +1,44 @@
+                           InstallFactory Report화일
+
+                                                       작성: 2025-8-26/18:37:19
+
+[일반]
+타이틀: 아르고스 아파트
+소스 폴더: D:\NTY\01_마이그레이션\3_src\Dev2\WEB_POS\bin\Release\net8.0-windows
+기본 설치 폴더: C:\ArgosAPT
+기본 설치 폴더로만 설치 가능: 아니오
+설치화일이 만들어진 폴더: D:\NTY\01_마이그레이션\3_src\Dev2\WEB_POS
+설치화일의 이름: ArgosAPT Install.exe
+설치화일의 언어: 한글
+설치화일의 볼륨 크기: 단일 볼륨
+설치시 화일이 이미 있으면 겹쳐쓸지 물어보기: 예
+설치 완료 후 시스템 재시작 필요함: 아니오
+
+[창]
+위자드 창 비트맵: InstallFactory 기본 위자드 창 비트맵
+제작자: 
+
+[단축 아이콘]
+단축 아이콘1: ArgosAPT,D:\NTY\01_마이그레이션\3_src\Dev2\WEB_POS\bin\Release\net8.0-windows\ArgosAPT.exe,{DeskTop},,,D:\NTY\01_마이그레이션\3_src\Dev2\WEB_POS\bin\Release\net8.0-windows\icon\Argos\Argos_Title_Real.ico
+프로그램그룹 이름: ArgosAPT
+
+[실행]
+사용자 설치프로그램: D:\NTY\01_마이그레이션\3_src\Dev2\WEB_POS\bin\Release\net8.0-windows\util\MicrosoftEdgeWebView2RuntimeInstallerX64.exe
+사용자 설치프로그램 명령행 인수: 
+사용자 설치프로그램 실행 중 위자드 창 숨기기: 아니오
+사용자 설치프로그램 실행 후 삭제: 아니오
+설치 완료 후 실행할 프로그램: D:\NTY\01_마이그레이션\3_src\Dev2\WEB_POS\bin\Release\net8.0-windows\util\windowsdesktop-runtime-8.0.16-win-x64.exe
+설치 완료 후 실행할 프로그램 명령행 인수: 
+설치 완료 후 실행할 프로그램 실행 선택 가능: 아니오
+
+[제거]
+제거 타입: 설치시 만든 폴더 안에 설치 이후에 만들어진 화일이 있으면 삭제할지 물어봄
+제어판의 '프로그램 추가/제거' 항목에 등록할 이름: ArgosAPT
+프로그램그룹에 추가할 제거 단축 아이콘의 이름: ArgosAPT
+
+--------------------------------------------------------------------------------
+총 소스화일의 수  : 529
+총 소스화일의 크기: 308,885,014 바이트
+
+총 설치화일의 수  : 1
+총 설치화일의 크기: 266,085,683 바이트
