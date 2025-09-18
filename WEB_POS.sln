@@ -1,0 +1,29 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34723.18
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{778DAE3C-4631-46EA-AA77-85C1314464D9}") = "WEB_POS", "WEB_POS.vbproj", "{CBD7D8E1-5EAF-40B4-B6B8-7F04692A4683}"
+EndProject
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "prjSetup", "..\prjSetup\prjSetup.vdproj", "{BD4A57F9-CCA8-446A-B8BC-8105669A8A87}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{CBD7D8E1-5EAF-40B4-B6B8-7F04692A4683}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CBD7D8E1-5EAF-40B4-B6B8-7F04692A4683}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CBD7D8E1-5EAF-40B4-B6B8-7F04692A4683}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CBD7D8E1-5EAF-40B4-B6B8-7F04692A4683}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD4A57F9-CCA8-446A-B8BC-8105669A8A87}.Debug|Any CPU.ActiveCfg = Debug
+		{BD4A57F9-CCA8-446A-B8BC-8105669A8A87}.Release|Any CPU.ActiveCfg = Release
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9F198567-2804-4A04-BBDC-599BFDD2BDE2}
+	EndGlobalSection
+EndGlobal
