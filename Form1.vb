@@ -3,6 +3,7 @@ Imports System.Diagnostics
 Imports System.Drawing.Imaging
 Imports System.IO
 Imports System.IO.Ports
+Imports System.Reflection
 Imports System.Reflection.Metadata
 Imports System.Runtime.InteropServices
 Imports System.Security.Permissions
@@ -14,9 +15,14 @@ Imports System.Windows.Forms
 Imports System.Windows.Forms.VisualStyles.VisualStyleElement
 Imports AForge.Video
 Imports AForge.Video.DirectShow
+Imports Microsoft.Data.SqlClient
+Imports Microsoft.Identity.Extensions
 Imports Microsoft.VisualBasic.ApplicationServices
 Imports Microsoft.Web.WebView2.Core
 Imports Microsoft.Web.WebView2.WinForms
+Imports UCBioBSPCOMLib
+Imports UCSAPICOMLib
+Imports Windows.Win32.UI.Input
 
 
 Public Class Form1
@@ -28,8 +34,43 @@ Public Class Form1
     Private gImgViewID As String
     Private gBase64ID As String
     Private gMainYN As String
+    Private gImgViewID_F As String
+    Private gBase64ID_F As String
+    Private gMainYN_F As String
+    Private gMemIDX_F As Integer
     Private frmWebcamPreview As Form2
+    Private frmFinger As frmFinger
     Private DualForms As DualForm
+
+    Private lastSyncTimestamp As DateTime = DateTime.MinValue
+    Private WithEvents syncTimer As New System.Windows.Forms.Timer()
+
+    ' 지문 관련 선언 
+    Public WithEvents objUCSAPICOM As New UCSAPI()
+    Public objTerminalUserData As ITerminalUserData
+    Public objServerUserData As IServerUserData
+    Public objAccessLogData As IAccessLogData
+    Public objAccessControlData As IAccessControlData
+    Public objServerAuthentication As IServerAuthentication
+    Public objTerminalOption As ITerminalOption
+
+    'UCBioBSP Object
+    Public WithEvents objUCBioBSP As New UCBioBSP()
+    Public objDevice As IDevice
+    Public objExtraction As IExtraction
+    Public objMatching As IMatching
+    Public objFPData As IFPData
+    Public objFPImage As IFPImage
+    Public objFastSearch As IFastSearch
+
+    Public szTextEnrolledFIR As String
+    Private binaryEnrolledFIR() As Byte
+
+    'UCBioBSP Object-스마트카드
+    Private objSmartCard As ISmartCard   ' RF카드용 선언 
+    '지문 품질값 51~75 적절한, 76~100 우수한, 정상적인 매칭을 위해서는 76 이상에 지문사용필요함
+    ' VB6의 Long (32비트)은 VB.NET의 Integer (32비트)에 해당함..
+    Private gBioAPI_QUALITY As Integer
 
 
     Private Async Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
@@ -49,23 +90,53 @@ Public Class Form1
         '    DualForms.Show()
         'End If
 
-
         'MessageBox.Show("프로그램 실행!!.", "디버깅", MessageBoxButtons.OK, MessageBoxIcon.Error)
 
         ' 배포시 주석처리, 테스트시 주석해제
-        'CheckBox1.Checked = 1
-        'CheckBox1.Visible = True
+        CheckBox1.Checked = 1
+        CheckBox1.Visible = True
 
         ' 배포시 주석해제, 테스트시 주석처리
-        CheckBox1.Checked = 0
-        CheckBox1.Visible = False
+        'CheckBox1.Checked = 0
+        'CheckBox1.Visible = False
 
 
         WebView21.Visible = True
         pnlCSMain.Visible = False
         Await subFormLoad()
 
+        '지문 dll 로드
+        subFingerLoad()
+        '지문서버 시작
+        Finger_Server_Start()
 
+
+    End Sub
+    Private Sub subFingerLoad()
+
+        Try
+            '// Create UCSCOM object
+            objUCSAPICOM = New UCSAPI()
+            objTerminalUserData = objUCSAPICOM.TerminalUserData
+            objServerUserData = objUCSAPICOM.ServerUserData
+            objAccessLogData = objUCSAPICOM.AccessLogData
+            objAccessControlData = objUCSAPICOM.AccessControlData
+            objServerAuthentication = objUCSAPICOM.ServerAuthentication
+            objTerminalOption = objUCSAPICOM.TerminalOption
+
+            '// Create UCBioBSP object
+            objUCBioBSP = New UCBioBSP()
+            objDevice = objUCBioBSP.Device
+            objExtraction = objUCBioBSP.Extraction
+            objMatching = objUCBioBSP.Matching
+            objFPData = objUCBioBSP.FPData
+            objFPImage = objUCBioBSP.FPImage
+            objFastSearch = objUCBioBSP.FastSearch '//지문인증용
+            objSmartCard = objUCBioBSP.SmartCard '//RF카드 인식용
+            objDevice.Enumerate()  ' 현재 pc에 연결된 지문장치 목록을 가져옴
+        Catch ex As Exception
+            MessageBox.Show(ex.Message)
+        End Try
     End Sub
 
     Private Async Function subFormLoad() As Task
@@ -212,10 +283,18 @@ Public Class Form1
                     Case "fnJava_Post"
                         Await fnJava_Post()
 
-                    Case "Set_DBInfo"
+                    Case "Get_DBInfo"   ' 로그인 메인 페이지의 fnWebCsDbInfoSetter 함수
                         If data.TryGetProperty("dbInfo", Nothing) Then
                             Dim dbInfoJson As String = data.GetProperty("dbInfo").GetRawText()
-                            Await Set_DBInfo(dbInfoJson)    '웹으로부터 디비접속정보를 Json 문자열로 받아서 전역변수에 담는 함수
+                            Await Get_DBInfo(dbInfoJson)    '웹으로부터 디비접속정보를 Json 문자열로 받아서 전역변수에 담는 함수
+
+                            ' 디비접속정보를 가져왔다면 지문 테이블에서 데이타 가져와서  objFastSearch 모듈에 지문 탬플릿 데이타 등록을 진행한다.
+                            LoadAllFingerprintsFromDB()  ' 사용자 지문인증을 위한 유니온 고속검색엔진dll에 지문탬플릿을 로드하는 작업 
+                            lastSyncTimestamp = DateTime.Now.AddSeconds(-5)
+                            ' 갱신 지문데이타 있는지 체크하는 타이머 실행 
+                            syncTimer.Interval = 30000   ' 30초
+                            'syncTimer.Interval = 10000   ' 10초
+                            syncTimer.Start()
                         End If
 
                     Case "Get_WebPosInfo"
@@ -235,6 +314,25 @@ Public Class Form1
                             sMainYn = data.GetProperty("MainYn").GetString()
                         End If
                         Get_WebCamCall(sImgViewID, sBase64ID, sMainYn)   ' 웹캠 호출
+
+                    Case "Get_FingerRegCall"
+                        Dim sImgViewID As String = ""
+                        Dim sBase64ID As String = ""
+                        Dim sMainYn As String = ""
+                        Dim sMemIDX As Integer = -1
+                        If data.TryGetProperty("imgViewID", Nothing) Then
+                            sImgViewID = data.GetProperty("imgViewID").GetString()
+                        End If
+                        If data.TryGetProperty("base64ID", Nothing) Then
+                            sBase64ID = data.GetProperty("base64ID").GetString()
+                        End If
+                        If data.TryGetProperty("MainYn", Nothing) Then
+                            sMainYn = data.GetProperty("MainYn").GetString()
+                        End If
+                        If data.TryGetProperty("MemIDX", Nothing) Then
+                            sMemIDX = data.GetProperty("MemIDX").GetString()
+                        End If
+                        Get_FingerRegCall(sImgViewID, sBase64ID, sMainYn, sMemIDX)   ' 지문등록 화면
 
                     Case "Bas_ConfigLoad"
                         Await Bas_ConfigLoad() '단지코드와 포스번호를 입력받는 설정창을 표시해주는 함수
@@ -281,7 +379,7 @@ Public Class Form1
                             "오류", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
-    Public Async Function Set_DBInfo(ByVal jsonStr As String) As Task
+    Public Async Function Get_DBInfo(ByVal jsonStr As String) As Task
         Try
             Using doc As JsonDocument = JsonDocument.Parse(jsonStr)
                 Dim root As JsonElement = doc.RootElement
@@ -342,6 +440,7 @@ Public Class Form1
 
     End Function
     Private Function Config_Load2() As Boolean
+        ' 웹에서 json으로 디비접속정보를 받기때문에 이 함수는 사용안함. 혹시몰라 임시로 남겨둠..
 
         Config_Load2 = True
         Try
@@ -547,7 +646,12 @@ Public Class Form1
         gBase64ID = sBase64ID
         gMainYN = sMainYn
         If frmWebcamPreview Is Nothing OrElse frmWebcamPreview.IsDisposed Then  ' frmWebcamPreview가 없거나 닫힌 경우
+            syncTimer.Stop()  ' 동기화 타이머 중지
             frmWebcamPreview = New Form2(Me)
+            AddHandler frmWebcamPreview.FormClosed, Sub(sender, e)
+                                                        syncTimer.Start()
+                                                        'Console.WriteLine("웹캠 종료. 동기화 타이머를 다시 시작합니다.")
+                                                    End Sub
             frmWebcamPreview.TopMost = True  ' 항상위에
             frmWebcamPreview.StartPosition = FormStartPosition.CenterScreen   ' 모니터 중앙
         End If
@@ -555,12 +659,40 @@ Public Class Form1
         frmWebcamPreview.Activate()  ' 폼을 활성화
         frmWebcamPreview.StartWebcam()  ' 웹캠 시작
     End Sub
+    '지문등록화면 호출
+    Public Sub Get_FingerRegCall(ByVal sImgViewID As String, ByVal sBase64ID As String, ByVal sMainYn As String, ByVal sMemIDX As Integer)
+        gImgViewID_F = sImgViewID
+        gBase64ID_F = sBase64ID
+        gMainYN_F = sMainYn
+        gMemIDX_F = sMemIDX
+        If frmFinger Is Nothing OrElse frmFinger.IsDisposed Then  ' frmWebcamPreview가 없거나 닫힌 경우
+            syncTimer.Stop()  ' 동기화 타이머 중지
+            frmFinger = New frmFinger(Me)
+            AddHandler frmFinger.FormClosed, Sub(sender, e)
+                                                 syncTimer.Start()
+                                                 'Console.WriteLine("지문 등록 종료. 동기화 타이머를 다시 시작합니다.")
+                                             End Sub
+            frmFinger.TopMost = True  ' 항상위에
+            frmFinger.StartPosition = FormStartPosition.CenterScreen   ' 모니터 중앙
+        End If
+        frmFinger.Show()  ' 폼이 이미 열려있으면 다시 열지 않음
+        frmFinger.Activate()  ' 폼을 활성화
+        frmFinger.sMemIDX = gMemIDX_F
+    End Sub
     Private Sub Form1_Closing(sender As Object, e As CancelEventArgs) Handles Me.Closing
 
         If frmWebcamPreview IsNot Nothing AndAlso Not frmWebcamPreview.IsDisposed Then
             frmWebcamPreview.Close()
             frmWebcamPreview = Nothing
         End If
+
+        If frmFinger IsNot Nothing AndAlso Not frmFinger.IsDisposed Then
+            frmFinger.Close()
+            frmFinger = Nothing
+        End If
+
+        syncTimer.Stop()
+        Finger_Server_Stop() ' 지문서버 종료
 
         ' Serial 포트 연결 해제
         modFunc.DisconnectSerialPort()
@@ -572,12 +704,273 @@ Public Class Form1
         If CheckBox1.Checked = True Then
             Button2.Visible = True
             Button3.Visible = True
+            Button4.Visible = True
             TextBox1.Visible = True
+            txtFingerDataLog.Visible = True
         Else
             Button2.Visible = False
             Button3.Visible = False
+            Button4.Visible = False
             TextBox1.Visible = False
+            txtFingerDataLog.Visible = False
         End If
     End Sub
 
+    Private Sub Button4_Click(sender As Object, e As EventArgs) Handles Button4.Click
+
+        Get_FingerRegCall("", "", "", 177)   ' 177 : 테스트용 회원번호
+
+
+    End Sub
+    ' 지문데이타를 DB에서 가져와서 objFastSearch 에 등록하는 함수
+    Private Sub LoadAllFingerprintsFromDB()
+
+        Using conn As SqlConnection = modDBConn.GetConnection()
+            If conn Is Nothing Then Return
+
+            Dim sql As String = "SELECT F_MEM_IDX, F_FINGER FROM T_MEM_PHOTO WHERE F_FINGER IS NOT NULL AND DATALENGTH(F_FINGER) > 0  " &
+                                " AND F_COMPANY_CODE = @F_COMPANY_CODE "
+            Using cmd As New SqlCommand(sql, conn)
+                cmd.Parameters.AddWithValue("@F_COMPANY_CODE", gCompanyCode)  'gCompanyCode
+                Try
+                    Using reader As SqlDataReader = cmd.ExecuteReader()
+                        While reader.Read()
+                            Dim img As Object = reader("F_FINGER")
+                            Dim nUserID As Integer
+
+                            If Not Convert.IsDBNull(img) Then
+                                Dim lbytTemp As Byte() = DirectCast(img, Byte())
+                                nUserID = If(Convert.IsDBNull(reader("F_MEM_IDX")), 0, Convert.ToInt32(reader("F_MEM_IDX")))
+                                If nUserID > 0 Then
+                                    ' 1. SDK가 인식할 수 있도록 데이터 파싱 및 파일 저장 (기존 로직 유지)
+                                    ' 이 부분은 디버깅용도로 사용되므로 실제사용시에는 필요없기때문에 주석처리한다.
+                                    'objFPData.Export(lbytTemp, 400)
+
+                                    'If objUCBioBSP.ErrorCode = 0 Then
+                                    '    Dim nFingerCnt As Integer = objFPData.TotalFingerCount
+                                    '    Dim nSampleNum As Integer = objFPData.SampleNumber
+                                    '    For f As Integer = 0 To nFingerCnt - 1
+                                    '        Dim nFingerID As Integer = objFPData.FingerID(f)
+                                    '        For s As Integer = 0 To nSampleNum - 1
+                                    '            Dim biTemplate As Byte() = objFPData.FPSampleData(nFingerID, s)
+                                    '            Dim szFileName As String = Path.Combine(Application.StartupPath, nUserID.ToString() & ".uct")
+                                    '            SaveImageFromDb(biTemplate, szFileName)
+                                    '        Next
+                                    '    Next
+                                    'Else
+                                    '    ' Export 오류 발생 시 콘솔에 로그를 남깁니다.
+                                    '    Console.WriteLine("FPData.Export Error: " & objUCBioBSP.ErrorDescription)
+                                    'End If
+
+                                    ' 2. 고속 검색 엔진에 지문 정보 등록 (이 부분이 중요....지문검색엔진 모듈객체에 등록을 해야 인증을 할때 얘를 갖다가 비교를 한다.)
+                                    objFastSearch.RemoveUser(nUserID) ' 기존 정보가 있다면 삭제
+                                    objFastSearch.AddFIR(lbytTemp, nUserID) ' 새 정보 추가
+
+                                    If objUCBioBSP.ErrorCode <> 0 Then ' UCBioAPIERROR_NONE = 0
+                                        MessageBox.Show(objUCBioBSP.ErrorDescription & " [" & objUCBioBSP.ErrorCode & "]")
+                                        Return
+                                    End If
+                                End If
+                            End If
+                        End While
+                    End Using
+                Catch ex As Exception
+                    MessageBox.Show("데이터 처리 중 오류 발생: " & ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                End Try
+            End Using
+        End Using ' 이 지점에서 conn 객체는 자동으로 Close 및 Dispose 됩니다.
+    End Sub
+    Private Sub Finger_Server_Start()
+        Try
+            objUCSAPICOM.ServerStart(20, 9870)   ' 9870은 지문인증장비 기본포트값인데 실제 지문인증장비에서 설정된 포트값과 같아야함
+            If objUCSAPICOM.ErrorCode <> 0 Then
+                MessageBox.Show("지문장비 초기화 중 오류 발생: " & objUCSAPICOM.ErrorCode, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End If
+        Catch ex As Exception
+            MessageBox.Show(ex.Message)
+        End Try
+    End Sub
+    Private Sub Finger_Server_Stop()
+        Try
+            objUCSAPICOM.ServerStop()
+        Catch ex As Exception
+            MessageBox.Show(ex.Message)
+        End Try
+    End Sub
+    Private Sub objUCSAPICOM_EventVerifyFinger1toN(TerminalID As Integer, AuthMode As Integer, InputIDLength As Integer, SecurityLevel As Integer, AntipassbackLevel As Integer, FingerData As Object) Handles objUCSAPICOM.EventVerifyFinger1toN
+
+        '//ErrorCode 설명
+        '// 769:미등록사용자, 770:매칭실패, 771:권한없음, 772:지문Capture 실패
+        '// 773:인증실패, 774:패스백
+        '// 775:권한없음(네트워크 문제로 서버로부터 응답없음)
+        '// 776:권한없음(서버가 Busy 상태로 인증을 수행 할수 없음)
+        '// 777:얼굴이 인지되지 않았습니다.
+
+        Try
+
+            '// --- 지문 단일 인증 (1:N 매칭) 로직 시작 ---
+
+            ' Variant(Object)로 받은 지문 데이터를 Byte 배열로 명시적 형변환
+            Dim fingerDataBytes As Byte() = DirectCast(FingerData, Byte())
+            Dim logMessage As String = $"[{DateTime.Now:HH:mm:ss}] FIR 변환 시작"
+
+            ' FIR(지문 템플릿)로 변환
+            txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
+            objFPData.Import(1, 1, 2, 400, 400, fingerDataBytes, 0)
+
+            Dim biInputFingerData As Byte() = DirectCast(objFPData.FIR, Byte())
+            logMessage = $"[{DateTime.Now:HH:mm:ss}] FIR 변환 완료"
+            txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
+
+            ' 메모리에 로드된 지문 정보와 비교하여 사용자 검색
+            objFastSearch.MaxSearchTime = 0 ' 0 = 검색제한시간 : 무제한
+            logMessage = $"[{DateTime.Now:HH:mm:ss}] 사용자 검색 시작"
+            txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
+
+            objFastSearch.IdentifyUser(biInputFingerData, UCBioAPI_FIR_SECURITY_LEVEL_NORMAL)
+            logMessage = $"[{DateTime.Now:HH:mm:ss}] 사용자 검색 완료"
+            txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
+
+            Dim isAuthorized As Integer
+            Dim isAcessibility As Integer = 1
+            Dim isVistor As Integer = 0
+            Dim isUserID As Integer
+            Dim sErrorCode As Integer
+
+            If objUCBioBSP.ErrorCode = 0 Then
+                ' 매칭 성공
+                Dim objMatchedFpInfo As ITemplateInfo = objFastSearch.MatchedFpInfo
+
+                If objUCBioBSP.ErrorCode = 0 Then
+                    isUserID = objMatchedFpInfo.UserID
+                    isAuthorized = 1 ' 인증 성공
+                    sErrorCode = 0
+
+                    logMessage = $"[{DateTime.Now:HH:mm:ss}] 1차 인증 성공: UserID({isUserID}), FingerID({objMatchedFpInfo.FingerID}) 찾음"
+                    txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
+
+                    ' 여기에서 비지니스 로직을 수행하거나 아니면 웹으로 인증결과만 넘겨주고 웹의 방문창을 띄우게 하거나...
+                    ' -------------------비즈니스 로직(권한 확인) 시작-----------------------
+                    If CheckUserAuthorizationFromDB(isUserID) Then
+                        isAuthorized = 1 ' 인증 성공
+                        sErrorCode = 0
+                        logMessage = $"{Environment.NewLine}2차 인증 성공: 사용자 ID({isUserID})는 출입 권한이 있습니다."
+                        txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
+                    Else
+                        isAuthorized = 0 ' 인증 실패
+                        sErrorCode = 771 ' ErrorCode: 권한 없음
+                        logMessage = $"{Environment.NewLine}2차 인증 실패: 사용자 ID({isUserID})는 출입 권한이 없습니다."
+                        txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
+                    End If
+                    '------------------- 비즈니스 로직(권한 확인) 종료------------------------------
+                Else
+                    ' 매칭은 성공했으나, 매칭된 정보(UserID)를 가져오는 데 실패한 경우
+                    isUserID = 0
+                    isAuthorized = 0 ' 인증 실패
+                    sErrorCode = objUCBioBSP.ErrorCode   ' 769 ' 미등록 사용자 또는 정보 조회 실패
+                    txtFingerDataLog.Text &= $"{Environment.NewLine}매칭 후 정보 조회 실패"
+                End If
+            Else
+                ' 매칭 실패
+                isUserID = 0
+                isAuthorized = 0 ' 인증 실패
+                sErrorCode = objUCBioBSP.ErrorCode
+                logMessage = $"{Environment.NewLine}매칭 실패: {objUCBioBSP.ErrorDescription} [{sErrorCode}]"
+                txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
+            End If
+
+            ' --- 인증 결과 전송 ---
+            txtFingerDataLog.Text &= $"{Environment.NewLine}인증 결과 전송"
+            Dim txtEventTime As String = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+
+            ' 인증 타입 설정 (단일 인증)
+            objServerAuthentication.SetAuthType(0, 1, 0, 0, 1, 0)
+            ' 터미널로 최종 인증 결과 전송 -- 전송되면 접점신호가 발생한다.
+            objServerAuthentication.SendAuthResultToTerminal(TerminalID, isUserID, isAcessibility, isVistor, isAuthorized, txtEventTime, sErrorCode)
+
+            logMessage &= $"{Environment.NewLine}<--EventVerifyFinger1toN"
+            logMessage &= $"{Environment.NewLine}      +ErrorCode: {objUCSAPICOM.ErrorCode}"
+            logMessage &= $"{Environment.NewLine}      +TerminalID: {TerminalID}"
+            txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
+            txtFingerDataLog.Text = "------------------------------------" & Environment.NewLine & txtFingerDataLog.Text
+
+            'Dim sMsg As String
+            'If isAuthorized = 1 Then
+            '    sMsg = "오늘도 즐거운 하루 보내세요!!"
+            'Else
+            '    sMsg = "등록된 지문이 아니다!!!!!!!"
+            'End If
+            'objUCSAPICOM.SendPrivateMessageToTerminal(0, TerminalID, Len(sMsg), sMsg, 5)  ' 5초간 메시지 표시
+
+        Catch ex As Exception
+            Dim logMessage As String = $"[{DateTime.Now:HH:mm:ss}] 프로그램 오류 발생: {ex.Message}"
+            txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
+        End Try
+
+
+
+
+    End Sub
+    '지문 갱신데이타 존재여부 확인 
+    Public Sub SyncNewFingerprints()
+
+        Using conn As SqlConnection = modDBConn.GetConnection()
+            If conn Is Nothing Then Return
+
+            ' 새로운 데이터가 있는지 먼저 존재여부만 판단..
+            Dim hasNewData As Boolean = False
+            Dim checkSql As String = "IF EXISTS (SELECT 1 FROM T_MEM_PHOTO " &
+                                 "WHERE F_COMPANY_CODE = @F_COMPANY_CODE AND F_UDATE > @LastSyncTime " &
+                                 "AND F_FINGER IS NOT NULL AND DATALENGTH(F_FINGER) > 0) " &
+                                 "SELECT 1 ELSE SELECT 0"
+
+            Using checkCmd As New SqlCommand(checkSql, conn)
+                checkCmd.Parameters.AddWithValue("@F_COMPANY_CODE", gCompanyCode)
+                checkCmd.Parameters.AddWithValue("@LastSyncTime", lastSyncTimestamp)
+                If CInt(checkCmd.ExecuteScalar()) = 1 Then
+                    hasNewData = True
+                End If
+            End Using
+
+            '새로운 데이터가 없으면, 원래 로직을 실행하지 않고 즉시 종료.
+            If Not hasNewData Then Return
+
+            Dim sql As String = "SELECT F_MEM_IDX, F_FINGER FROM T_MEM_PHOTO " &
+                            "WHERE F_COMPANY_CODE = @F_COMPANY_CODE AND F_UDATE > @LastSyncTime " &
+                            "AND F_FINGER IS NOT NULL AND DATALENGTH(F_FINGER) > 0"
+
+            Using cmd As New SqlCommand(sql, conn)
+                cmd.Parameters.AddWithValue("@F_COMPANY_CODE", gCompanyCode)
+                cmd.Parameters.AddWithValue("@LastSyncTime", lastSyncTimestamp)
+
+                Try
+                    Using reader As SqlDataReader = cmd.ExecuteReader()
+                        While reader.Read()
+                            Dim img As Object = reader("F_FINGER")
+                            Dim nUserID As Integer
+                            If Not Convert.IsDBNull(img) Then
+                                Dim lbytTemp As Byte() = DirectCast(img, Byte())
+                                nUserID = If(Convert.IsDBNull(reader("F_MEM_IDX")), 0, Convert.ToInt32(reader("F_MEM_IDX")))
+                                If nUserID > 0 Then
+                                    objFastSearch.RemoveUser(nUserID) ' 기존 정보가 있다면 삭제
+                                    objFastSearch.AddFIR(lbytTemp, nUserID) ' 새 정보 추가
+                                    If objUCBioBSP.ErrorCode <> 0 Then
+                                        'MessageBox.Show(objUCBioBSP.ErrorDescription & " [" & objUCBioBSP.ErrorCode & "]")
+                                        Return
+                                    End If
+                                End If
+                            End If
+                        End While
+                    End Using
+                    lastSyncTimestamp = DateTime.Now.AddSeconds(-5)
+                Catch ex As Exception
+                    MessageBox.Show("지문 정보 갱신 중 오류 발생: " & ex.Message)
+                End Try
+            End Using
+        End Using
+    End Sub
+
+    Private Sub syncTimer_Tick(sender As Object, e As EventArgs) Handles syncTimer.Tick
+        SyncNewFingerprints()
+    End Sub
 End Class

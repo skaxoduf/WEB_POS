@@ -101,7 +101,7 @@ Public Class Form2
 
 
                     If parentForm IsNot Nothing Then
-                        'Dim targetWebViewUrl As String = "http://julist.webpos.co.kr/login/default_base64.asp"
+                        'Dim targetWebViewUrl As String = "http://julist.webpos.co.kr/login/default_base64.asp"   ' 사용안함
                         Me.Close()  '사진을 찍었으면 창을 닫아준다.
                         Await parentForm.SendBase64ToWebView(base64String, "")
                     Else
@@ -151,4 +151,7 @@ Public Class Form2
         Me.Close()  '닫기
     End Sub
 
+    Private Sub Form2_Closed(sender As Object, e As EventArgs) Handles Me.Closed
+
+    End Sub
 End Class

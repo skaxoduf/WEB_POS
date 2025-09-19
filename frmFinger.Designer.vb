@@ -25,6 +25,8 @@ Partial Class frmFinger
         Button1 = New Button()
         Button4 = New Button()
         picFingerImg = New PictureBox()
+        SqlConnection1 = New Microsoft.Data.SqlClient.SqlConnection()
+        TxtMsg = New TextBox()
         CType(picFingerImg, ComponentModel.ISupportInitialize).BeginInit()
         SuspendLayout()
         ' 
@@ -50,16 +52,32 @@ Partial Class frmFinger
         ' 
         picFingerImg.Location = New Point(14, 20)
         picFingerImg.Name = "picFingerImg"
-        picFingerImg.Size = New Size(400, 520)
+        picFingerImg.Size = New Size(414, 520)
         picFingerImg.SizeMode = PictureBoxSizeMode.StretchImage
         picFingerImg.TabIndex = 7
         picFingerImg.TabStop = False
+        ' 
+        ' SqlConnection1
+        ' 
+        SqlConnection1.AccessTokenCallback = Nothing
+        SqlConnection1.FireInfoMessageEventOnUserErrors = False
+        ' 
+        ' TxtMsg
+        ' 
+        TxtMsg.Location = New Point(397, 443)
+        TxtMsg.Multiline = True
+        TxtMsg.Name = "TxtMsg"
+        TxtMsg.ScrollBars = ScrollBars.Vertical
+        TxtMsg.Size = New Size(387, 509)
+        TxtMsg.TabIndex = 10
+        TxtMsg.Visible = False
         ' 
         ' frmFinger
         ' 
         AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
-        ClientSize = New Size(428, 622)
+        ClientSize = New Size(440, 622)
+        Controls.Add(TxtMsg)
         Controls.Add(Button1)
         Controls.Add(Button4)
         Controls.Add(picFingerImg)
@@ -70,9 +88,12 @@ Partial Class frmFinger
         Text = "frmFinger"
         CType(picFingerImg, ComponentModel.ISupportInitialize).EndInit()
         ResumeLayout(False)
+        PerformLayout()
     End Sub
 
     Friend WithEvents Button1 As Button
     Friend WithEvents Button4 As Button
     Friend WithEvents picFingerImg As PictureBox
+    Friend WithEvents SqlConnection1 As Microsoft.Data.SqlClient.SqlConnection
+    Friend WithEvents TxtMsg As TextBox
 End Class

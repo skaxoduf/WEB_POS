@@ -5,13 +5,11 @@ Imports Microsoft.Data.SqlClient   '.net8.0에서는 이 네임스페이스 사�
 Module modDBConn
     ' 프로그램 전체에서 사용할 DB 연결 정보 문자열
     Public ConnectionString As String
-
     Public Function GetConnection() As SqlConnection
         If String.IsNullOrEmpty(ConnectionString) Then
             MessageBox.Show("데이터베이스 연결 정보가 설정되지 않았습니다.", "설정 오류", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Return Nothing
         End If
-
         Try
             Dim conn As New SqlConnection(ConnectionString)
             conn.Open()
@@ -49,13 +47,14 @@ Module modDBConn
             If conn Is Nothing Then Return False
 
             ' 일단 임시로 테스트용으로 성별체크하는걸로  
-            Dim sql As String = "SELECT Sex FROM T_Member WHERE MbNo = @UserID"
+            Dim sql As String = "SELECT F_SEX FROM T_MEM WHERE F_IDX = @F_IDX AND F_COMPANY_CODE = @F_COMPANY_CODE   "
             Using cmd As New SqlCommand(sql, conn)
-                cmd.Parameters.AddWithValue("@UserID", userID)
+                cmd.Parameters.AddWithValue("@F_IDX", userID)
+                cmd.Parameters.AddWithValue("@F_COMPANY_CODE", gCompanyCode) 'gCompanyCode
                 Try
                     Dim sexValue As Object = cmd.ExecuteScalar()
                     If sexValue IsNot Nothing AndAlso Not Convert.IsDBNull(sexValue) Then
-                        If sexValue.ToString() = "0" Then
+                        If sexValue.ToString() = "M" Then
                             Return True
                         End If
                         Return False
@@ -63,7 +62,7 @@ Module modDBConn
                         Return False
                     End If
                 Catch ex As Exception
-                    'Debug.WriteLine($"CheckUserAuthorizationFromDB Error: {ex.Message}")
+                    MessageBox.Show($"2차 인증 DB Check Error: {ex.Message}")
                     Return False
                 End Try
             End Using

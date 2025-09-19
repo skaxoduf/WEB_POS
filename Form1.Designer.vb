@@ -35,6 +35,8 @@ Partial Class Form1
         Button3 = New Button()
         CheckBox1 = New CheckBox()
         TextBox1 = New TextBox()
+        Button4 = New Button()
+        txtFingerDataLog = New TextBox()
         pnlCSMain.SuspendLayout()
         CType(WebView21, ComponentModel.ISupportInitialize).BeginInit()
         SuspendLayout()
@@ -170,14 +172,34 @@ Partial Class Form1
         TextBox1.Size = New Size(258, 23)
         TextBox1.TabIndex = 6
         ' 
+        ' Button4
+        ' 
+        Button4.Location = New Point(434, 681)
+        Button4.Name = "Button4"
+        Button4.Size = New Size(104, 45)
+        Button4.TabIndex = 3
+        Button4.Text = "지문 등록"
+        Button4.UseVisualStyleBackColor = True
+        ' 
+        ' txtFingerDataLog
+        ' 
+        txtFingerDataLog.Location = New Point(827, 229)
+        txtFingerDataLog.Multiline = True
+        txtFingerDataLog.Name = "txtFingerDataLog"
+        txtFingerDataLog.ScrollBars = ScrollBars.Vertical
+        txtFingerDataLog.Size = New Size(494, 289)
+        txtFingerDataLog.TabIndex = 7
+        ' 
         ' Form1
         ' 
         AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
         ClientSize = New Size(1333, 803)
+        Controls.Add(txtFingerDataLog)
         Controls.Add(TextBox1)
         Controls.Add(CheckBox1)
         Controls.Add(pnlCSMain)
+        Controls.Add(Button4)
         Controls.Add(Button3)
         Controls.Add(Button2)
         Controls.Add(Button1)
@@ -203,5 +225,7 @@ Partial Class Form1
     Friend WithEvents Button3 As Button
     Friend WithEvents CheckBox1 As CheckBox
     Friend WithEvents TextBox1 As TextBox
+    Friend WithEvents Button4 As Button
+    Friend WithEvents txtFingerDataLog As TextBox
 
 End Class
