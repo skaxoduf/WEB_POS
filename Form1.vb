@@ -65,6 +65,8 @@ Public Class Form1
 
     Public szTextEnrolledFIR As String
     Private binaryEnrolledFIR() As Byte
+    Private sFingerAuthUseYN As Boolean = False   ' 지문인증을 여기서 사용할건지 여부 플래그 
+    Private sTestYN As Boolean = True   ' TEST 환경인지 플래그, 테스트 : True,  배포 : False
 
     'UCBioBSP Object-스마트카드
     Private objSmartCard As ISmartCard   ' RF카드용 선언 
@@ -92,23 +94,25 @@ Public Class Form1
 
         'MessageBox.Show("프로그램 실행!!.", "디버깅", MessageBoxButtons.OK, MessageBoxIcon.Error)
 
-        ' 배포시 주석처리, 테스트시 주석해제
-        CheckBox1.Checked = 1
-        CheckBox1.Visible = True
-
-        ' 배포시 주석해제, 테스트시 주석처리
-        'CheckBox1.Checked = 0
-        'CheckBox1.Visible = False
+        If sTestYN = True Then
+            CheckBox1.Checked = 1
+            CheckBox1.Visible = True
+        Else
+            CheckBox1.Checked = 0
+            CheckBox1.Visible = False
+        End If
 
 
         WebView21.Visible = True
         pnlCSMain.Visible = False
         Await subFormLoad()
 
-        '지문 dll 로드
+        '지문 dll 로드(지문등록을 위해 dll 로드 진행)
         subFingerLoad()
-        '지문서버 시작
-        Finger_Server_Start()
+
+        If sFingerAuthUseYN = True Then ' 지문인증사용여부가 True이면 지문서버 시작
+            Finger_Server_Start()
+        End If
 
 
     End Sub
@@ -288,13 +292,16 @@ Public Class Form1
                             Dim dbInfoJson As String = data.GetProperty("dbInfo").GetRawText()
                             Await Get_DBInfo(dbInfoJson)    '웹으로부터 디비접속정보를 Json 문자열로 받아서 전역변수에 담는 함수
 
-                            ' 디비접속정보를 가져왔다면 지문 테이블에서 데이타 가져와서  objFastSearch 모듈에 지문 탬플릿 데이타 등록을 진행한다.
-                            LoadAllFingerprintsFromDB()  ' 사용자 지문인증을 위한 유니온 고속검색엔진dll에 지문탬플릿을 로드하는 작업 
-                            lastSyncTimestamp = DateTime.Now.AddSeconds(-5)
-                            ' 갱신 지문데이타 있는지 체크하는 타이머 실행 
-                            syncTimer.Interval = 30000   ' 30초
-                            'syncTimer.Interval = 10000   ' 10초
-                            syncTimer.Start()
+                            If sFingerAuthUseYN = True Then  ' 지문인증사용여부가 True일 경우에만 
+                                ' 디비접속정보를 가져왔다면 지문 테이블에서 데이타 가져와서  objFastSearch 모듈에 지문 탬플릿 데이타 등록을 진행한다.
+                                ' 사용자 지문인증을 위한 유니온 고속검색엔진dll에 지문탬플릿을 로드하는 작업 
+                                LoadAllFingerprintsFromDB()
+
+                                ' 지문인증을 위해 30초마다 갱신 체크하는 시간 변수 초기화
+                                lastSyncTimestamp = DateTime.Now.AddSeconds(-5)
+                                syncTimer.Interval = 30000   ' 30초
+                                syncTimer.Start()
+                            End If
                         End If
 
                     Case "Get_WebPosInfo"
@@ -648,10 +655,13 @@ Public Class Form1
         If frmWebcamPreview Is Nothing OrElse frmWebcamPreview.IsDisposed Then  ' frmWebcamPreview가 없거나 닫힌 경우
             syncTimer.Stop()  ' 동기화 타이머 중지
             frmWebcamPreview = New Form2(Me)
-            AddHandler frmWebcamPreview.FormClosed, Sub(sender, e)
-                                                        syncTimer.Start()
-                                                        'Console.WriteLine("웹캠 종료. 동기화 타이머를 다시 시작합니다.")
-                                                    End Sub
+            If sFingerAuthUseYN = True Then
+                AddHandler frmWebcamPreview.FormClosed, Sub(sender, e)
+                                                            syncTimer.Start()
+                                                            'Console.WriteLine("웹캠 종료. 동기화 타이머를 다시 시작합니다.")
+                                                        End Sub
+            End If
+
             frmWebcamPreview.TopMost = True  ' 항상위에
             frmWebcamPreview.StartPosition = FormStartPosition.CenterScreen   ' 모니터 중앙
         End If
@@ -668,10 +678,12 @@ Public Class Form1
         If frmFinger Is Nothing OrElse frmFinger.IsDisposed Then  ' frmWebcamPreview가 없거나 닫힌 경우
             syncTimer.Stop()  ' 동기화 타이머 중지
             frmFinger = New frmFinger(Me)
-            AddHandler frmFinger.FormClosed, Sub(sender, e)
-                                                 syncTimer.Start()
-                                                 'Console.WriteLine("지문 등록 종료. 동기화 타이머를 다시 시작합니다.")
-                                             End Sub
+            If sFingerAuthUseYN = True Then
+                AddHandler frmFinger.FormClosed, Sub(sender, e)
+                                                     syncTimer.Start()
+                                                     'Console.WriteLine("지문 등록 종료. 동기화 타이머를 다시 시작합니다.")
+                                                 End Sub
+            End If
             frmFinger.TopMost = True  ' 항상위에
             frmFinger.StartPosition = FormStartPosition.CenterScreen   ' 모니터 중앙
         End If
@@ -691,8 +703,10 @@ Public Class Form1
             frmFinger = Nothing
         End If
 
-        syncTimer.Stop()
-        Finger_Server_Stop() ' 지문서버 종료
+        If sFingerAuthUseYN = True Then
+            syncTimer.Stop()
+            Finger_Server_Stop() ' 지문서버 종료
+        End If
 
         ' Serial 포트 연결 해제
         modFunc.DisconnectSerialPort()
@@ -906,9 +920,6 @@ Public Class Form1
             Dim logMessage As String = $"[{DateTime.Now:HH:mm:ss}] 프로그램 오류 발생: {ex.Message}"
             txtFingerDataLog.Text = logMessage & Environment.NewLine & txtFingerDataLog.Text
         End Try
-
-
-
 
     End Sub
     '지문 갱신데이타 존재여부 확인 
