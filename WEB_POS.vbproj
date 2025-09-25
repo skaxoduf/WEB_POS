@@ -9,6 +9,24 @@
     <ApplicationIcon>bin\Release\net8.0-windows\icon\Argos\Argos_Title_Real.ico</ApplicationIcon>
     <AssemblyName>ArgosAPT</AssemblyName>
     <Version>1.0.0.2</Version>
+    <Platforms>AnyCPU;x86</Platforms>
+    <ImportedNamespaces>System.Data=False,System.Drawing=False,System.Windows.Forms=False,Microsoft.VisualBasic=True,System=True,System.Collections=True,System.Collections.Generic=True,System.Diagnostics=True,System.Linq=True,System.Xml.Linq=True,System.Threading.Tasks=True,WEB_POS=True</ImportedNamespaces>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <RegisterForComInterop>False</RegisterForComInterop>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+    <RegisterForComInterop>False</RegisterForComInterop>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <RegisterForComInterop>False</RegisterForComInterop>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
+    <RegisterForComInterop>False</RegisterForComInterop>
   </PropertyGroup>
 
   <ItemGroup>

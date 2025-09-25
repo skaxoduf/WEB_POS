@@ -1,4 +1,5 @@
-﻿Imports System.IO
+﻿Imports System.Drawing.Imaging
+Imports System.IO
 Imports System.Reflection
 Imports Microsoft.Data.SqlClient
 Imports Microsoft.Identity.Extensions
@@ -42,11 +43,14 @@ Public Class frmFinger
         ParentForm = callingForm
     End Sub
 
-    Private Sub Button4_Click(sender As Object, e As EventArgs) Handles Button4.Click
+    Private Async Sub Button4_Click(sender As Object, e As EventArgs) Handles Button4.Click
 
         ' 지문인식 시작
 
         Try
+
+            TxtMsg.Text = ""
+
             ' Window style
             objUCBioBSP.WindowStyle = UCBioAPI_WINDOW_STYLE_INVISIBLE
             objUCBioBSP.FPForeColor = "000000"
@@ -86,16 +90,21 @@ Public Class frmFinger
                 Return
             End If
 
-            ' DB에 지문 저장 시도
-            If SaveFingerprintToDatabase("UPD", sMemIDX, biFIR) Then
-                If parentForm IsNot Nothing Then
-                    MessageBox.Show($"지문이 등록되었습니다.")
-                    Me.Close()  '지문등록이 완료되었다면 창을 닫아준다.
-                End If
-            Else
-                MessageBox.Show($"지문 데이타를 데이타베이스에 등록하는데 실패하였습니다.")
-                Return
-            End If
+
+
+
+            ' DB에 지문 저장 시도 (여기에서 저장 안하고 웹으로(Base64) 넘겨준다.)
+            'If SaveFingerprintToDatabase("UPD", sMemIDX, biFIR) Then
+            '    If parentForm IsNot Nothing Then
+            '        MessageBox.Show($"지문이 등록되었습니다.")
+            '        Me.Close()  '지문등록이 완료되었다면 창을 닫아준다.
+            '    End If
+            'Else
+            '    MessageBox.Show($"지문 데이타를 데이타베이스에 등록하는데 실패하였습니다.")
+            '    Return
+            'End If
+
+
 
 
             ' 이건 그냥 텍스트박스에 뿌리는용도...주석처리해도됨....
@@ -106,8 +115,15 @@ Public Class frmFinger
             'TxtMsg.Text &= hexString & vbCrLf
             'TxtMsg.Text &= "----------------------------------" & vbCrLf
 
+
             '' byte로 받아온 데이타를 base64로 변환
-            'Dim base64String = Convert.ToBase64String(biFIR)
+            ' 웹으로 Base64로 넘겨준다.
+
+            Dim base64String = Convert.ToBase64String(biFIR)
+            MessageBox.Show($"지문 데이타를 정상적으로 습득하였습니다.")
+            Me.Close()   ' 지문등록을 했으면 창을 닫아준다.
+            Await parentForm.SendFingerBase64ToWebView(base64String, "")
+
             'TxtMsg.Text &= vbCrLf & "--- Fingerprint Binary (Base64) ---" & vbCrLf
             'TxtMsg.Text &= base64String & vbCrLf
             'TxtMsg.Text &= "------------------------------------" & vbCrLf

@@ -66,7 +66,7 @@ Public Class Form1
     Public szTextEnrolledFIR As String
     Private binaryEnrolledFIR() As Byte
     Private sFingerAuthUseYN As Boolean = False   ' 지문인증을 여기서 사용할건지 여부 플래그 
-    Private sTestYN As Boolean = True   ' TEST 환경인지 플래그, 테스트 : True,  배포 : False
+    Private sTestYN As Boolean = False   ' TEST 환경인지 플래그, 테스트 : True,  배포 : False
 
     'UCBioBSP Object-스마트카드
     Private objSmartCard As ISmartCard   ' RF카드용 선언 
@@ -326,7 +326,7 @@ Public Class Form1
                         Dim sImgViewID As String = ""
                         Dim sBase64ID As String = ""
                         Dim sMainYn As String = ""
-                        Dim sMemIDX As Integer = -1
+                        ' Dim sMemIDX As Integer = -1
                         If data.TryGetProperty("imgViewID", Nothing) Then
                             sImgViewID = data.GetProperty("imgViewID").GetString()
                         End If
@@ -336,10 +336,10 @@ Public Class Form1
                         If data.TryGetProperty("MainYn", Nothing) Then
                             sMainYn = data.GetProperty("MainYn").GetString()
                         End If
-                        If data.TryGetProperty("MemIDX", Nothing) Then
-                            sMemIDX = data.GetProperty("MemIDX").GetString()
-                        End If
-                        Get_FingerRegCall(sImgViewID, sBase64ID, sMainYn, sMemIDX)   ' 지문등록 화면
+                        'If data.TryGetProperty("MemIDX", Nothing) Then
+                        '    sMemIDX = data.GetProperty("MemIDX").GetString()
+                        'End If
+                        Get_FingerRegCall(sImgViewID, sBase64ID, sMainYn)   ' 지문등록 화면
 
                     Case "Bas_ConfigLoad"
                         Await Bas_ConfigLoad() '단지코드와 포스번호를 입력받는 설정창을 표시해주는 함수
@@ -505,7 +505,7 @@ Public Class Form1
 
         ' 웹뷰를 숨기고 단지코드와 포스번호를 입력받는 설정창을 띄운다.
         'WebView21.Visible = False   '웹뷰창을 굳이 숨기지 않는다.
-        pnlCSMain.Visible = True
+        pnlCSMain.Visible = True   ' 환경설정창을 표시한다.
         pnlCSMain.Left = (Me.ClientSize.Width - pnlCSMain.Width) \ 2
         pnlCSMain.Top = (Me.ClientSize.Height - pnlCSMain.Height) \ 2
 
@@ -644,6 +644,21 @@ Public Class Form1
         End Try
 
     End Function
+    Public Async Function SendFingerBase64ToWebView(base64String As String, targetUrl As String) As Task
+        ' MessageBox.Show("자바스크립트 호출 성공!!!.", "성공!!", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        Try
+            ' 2. 페이지 로드가 완료된 후 JavaScript 함수 호출
+            Dim jsCode As String = $"$.fnWebFingerImgView('{base64String}', '{gBase64ID_F}', '{gImgViewID_F}', '{gMainYN_F}');"   ' jquery imgView : 자바스크립트에서 받는 함수명
+            If WebView21 IsNot Nothing AndAlso WebView21.CoreWebView2 IsNot Nothing Then
+                Await WebView21.CoreWebView2.ExecuteScriptAsync(jsCode)
+            Else
+                MessageBox.Show("WebView2가 초기화되지 않아 Base64 전송 실패.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End If
+        Catch ex As Exception
+            MessageBox.Show("WebView2로 Base64 전송 중 오류 발생: " & ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+
+    End Function
     Private Sub Button3_Click(sender As Object, e As EventArgs) Handles Button3.Click
         Get_WebCamCall("", "", "")
     End Sub
@@ -670,11 +685,11 @@ Public Class Form1
         frmWebcamPreview.StartWebcam()  ' 웹캠 시작
     End Sub
     '지문등록화면 호출
-    Public Sub Get_FingerRegCall(ByVal sImgViewID As String, ByVal sBase64ID As String, ByVal sMainYn As String, ByVal sMemIDX As Integer)
+    Public Sub Get_FingerRegCall(ByVal sImgViewID As String, ByVal sBase64ID As String, ByVal sMainYn As String)
         gImgViewID_F = sImgViewID
         gBase64ID_F = sBase64ID
         gMainYN_F = sMainYn
-        gMemIDX_F = sMemIDX
+        'gMemIDX_F = sMemIDX
         If frmFinger Is Nothing OrElse frmFinger.IsDisposed Then  ' frmWebcamPreview가 없거나 닫힌 경우
             syncTimer.Stop()  ' 동기화 타이머 중지
             frmFinger = New frmFinger(Me)
@@ -689,7 +704,7 @@ Public Class Form1
         End If
         frmFinger.Show()  ' 폼이 이미 열려있으면 다시 열지 않음
         frmFinger.Activate()  ' 폼을 활성화
-        frmFinger.sMemIDX = gMemIDX_F
+        ' frmFinger.sMemIDX = gMemIDX_F
     End Sub
     Private Sub Form1_Closing(sender As Object, e As CancelEventArgs) Handles Me.Closing
 
@@ -732,7 +747,7 @@ Public Class Form1
 
     Private Sub Button4_Click(sender As Object, e As EventArgs) Handles Button4.Click
 
-        Get_FingerRegCall("", "", "", 177)   ' 177 : 테스트용 회원번호
+        'Get_FingerRegCall("", "", "")   ' 177 : 테스트용 회원번호
 
 
     End Sub

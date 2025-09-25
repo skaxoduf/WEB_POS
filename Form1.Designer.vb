@@ -119,9 +119,10 @@ Partial Class Form1
         WebView21.AllowExternalDrop = True
         WebView21.CreationProperties = Nothing
         WebView21.DefaultBackgroundColor = Color.White
-        WebView21.Location = New Point(681, 487)
+        WebView21.Dock = DockStyle.Fill
+        WebView21.Location = New Point(0, 0)
         WebView21.Name = "WebView21"
-        WebView21.Size = New Size(800, 422)
+        WebView21.Size = New Size(1333, 803)
         WebView21.TabIndex = 2
         WebView21.ZoomFactor = 1R
         ' 
